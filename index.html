@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Spectre Playground</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body class="bg-zinc-950 text-white flex flex-col h-full">
+
+<div class="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900">
+    <div class="font-semibold">Spectre Playground</div>
+
+    <button id="runBtn"
+            class="bg-green-600 hover:bg-green-500 px-4 py-1 rounded text-sm">
+        Run
+    </button>
+</div>
+
+<div class="flex flex-1 overflow-hidden">
+
+    <div id="editor" class="w-1/2 h-full"></div>
+
+    <div class="w-1/2 flex flex-col border-l border-zinc-800">
+        <div class="p-2 text-xs text-zinc-400 border-b border-zinc-800">
+            Output
+        </div>
+
+        <pre id="output"
+             class="p-3 text-sm overflow-auto flex-1 whitespace-pre-wrap"></pre>
+    </div>
+
+</div>
+
+<script>
+let editor;
+
+async function postToBackend(code) {
+    const isHttp = window.location.protocol === "http:" || window.location.protocol === "https:";
+    const hostname = isHttp ? window.location.hostname : "127.0.0.1";
+    const candidateOrigins = [];
+
+    if (isHttp && window.location.port === "5000") {
+        candidateOrigins.push(window.location.origin);
+    }
+
+    candidateOrigins.push(`${window.location.protocol === "https:" ? "https:" : "http:"}//${hostname}:5000`);
+
+    if (hostname !== "127.0.0.1") {
+        candidateOrigins.push("http://127.0.0.1:5000");
+    }
+
+    if (hostname !== "localhost") {
+        candidateOrigins.push("http://localhost:5000");
+    }
+
+    const tried = new Set();
+    let lastError = "Unable to reach the Spectre backend.";
+
+    for (const origin of candidateOrigins) {
+        if (tried.has(origin)) {
+            continue;
+        }
+
+        tried.add(origin);
+
+        try {
+            const res = await fetch(`${origin}/compile`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    code: code,
+                    flags: []
+                })
+            });
+
+            const contentType = res.headers.get("content-type") || "";
+            const body = contentType.includes("application/json")
+                ? await res.json()
+                : { error: await res.text() };
+
+            if (!res.ok) {
+                lastError = body.error || `Request failed with ${res.status}`;
+                continue;
+            }
+
+            if (!contentType.includes("application/json")) {
+                lastError = "Backend returned HTML instead of JSON.";
+                continue;
+            }
+
+            return body;
+        } catch (error) {
+            lastError = error.message;
+        }
+    }
+
+    throw new Error(lastError);
+}
+
+require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" }});
+
+require(["vs/editor/editor.main"], function () {
+    editor = monaco.editor.create(document.getElementById("editor"), {
+        value: `val x: i32 = 10
+
+fn main() void = {
+    emit_cstr("Hello Spectre\\n")
+}`,
+        language: "plaintext",
+        theme: "vs-dark",
+        automaticLayout: true
+    });
+
+
+    monaco.languages.register({ id: "spectre" });
+
+    monaco.languages.setMonarchTokensProvider("spectre", {
+        tokenizer: {
+            root: [
+                [/\b(fn|val|if|elif|else|for|match|return|break)\b/, "keyword"],
+                [/\b(i32|i64|void|ref|list)\b/, "type"],
+                [/".*?"/, "string"],
+                [/\/\/.*$/, "comment"]
+            ]
+        }
+    });
+});
+document.getElementById("runBtn").onclick = async () => {
+    const code = editor.getValue();
+    const out = document.getElementById("output");
+
+    out.textContent = "Running...";
+
+    try {
+        const data = await postToBackend(code);
+
+        if (data.error) {
+            out.textContent = "Error: " + data.error;
+            return;
+        }
+
+        out.textContent =
+            "stdout:\n" + (data.stdout || "") +
+            "\n\nstderr:\n" + (data.stderr || "") +
+            "\n\nexit code: " + data.exit_code;
+    } catch (error) {
+        out.textContent = "Error: " + error.message;
+    }
+};
+</script>
+
+</body>
+</html>
