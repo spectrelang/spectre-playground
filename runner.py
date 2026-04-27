@@ -5,15 +5,47 @@ import uuid
 
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
+EXECUTION_TIMEOUT_SECONDS = 7
+
+
+class SecurityViolation(ValueError):
+    pass
+
+
+FORBIDDEN_SUBSTRINGS = (
+    ("std/os", 'Imports of "std/os" are not allowed.'),
+    ("std/fs", 'Imports of "std/fs" are not allowed.'),
+    ("std/reflection", 'Imports of "std/reflection" are not allowed.'),
+    (".os.", "Access to std.os is not allowed."),
+    (".fs.", "Access to std.fs is not allowed."),
+    (".reflection.", "Access to std.reflection is not allowed."),
+    ("extern", "Extern declarations are not allowed."),
+    ('link "', "Link directives are not allowed."),
+    ("link '", "Link directives are not allowed."),
+)
+
+
+def validate_code_security(code: str) -> None:
+    for forbidden_substring, message in FORBIDDEN_SUBSTRINGS:
+        if forbidden_substring in code:
+            raise SecurityViolation(message)
 
 
 def run_spectre(code: str, output: str = None, flags=None):
     if flags is None:
         flags = []
 
+    if output not in (None, ""):
+        raise SecurityViolation("Custom output paths are not allowed.")
+
+    if flags:
+        raise SecurityViolation("Custom compiler flags are not allowed.")
+
+    validate_code_security(code)
+
     file_id = str(uuid.uuid4())
     src_path = os.path.join(TEMP_DIR, f"{file_id}.sx")
-    binary_path = output or os.path.join(TEMP_DIR, file_id)
+    binary_path = os.path.join(TEMP_DIR, file_id)
 
     with open(src_path, "w", encoding="utf-8") as f:
         f.write(code)
@@ -24,7 +56,6 @@ def run_spectre(code: str, output: str = None, flags=None):
 
     cmd = [spectre_path, src_path]
 
-    # optional flags
     cmd.extend(flags)
 
     cmd.extend(["-o", binary_path])
@@ -34,7 +65,7 @@ def run_spectre(code: str, output: str = None, flags=None):
             cmd,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=EXECUTION_TIMEOUT_SECONDS
         )
 
         if compile_proc.returncode != 0:
@@ -51,7 +82,7 @@ def run_spectre(code: str, output: str = None, flags=None):
             [binary_path],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=EXECUTION_TIMEOUT_SECONDS
         )
 
         stderr = "\n".join(part for part in (compile_proc.stderr, run_proc.stderr) if part)
@@ -62,9 +93,11 @@ def run_spectre(code: str, output: str = None, flags=None):
             "exit_code": run_proc.returncode
         }
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        timed_out_command = exc.cmd[0] if exc.cmd else ""
+        phase = "Compilation" if timed_out_command == spectre_path else "Execution"
         return {
-            "error": "Execution timed out"
+            "error": f"{phase} timed out after {EXECUTION_TIMEOUT_SECONDS} seconds"
         }
 
     finally:
@@ -73,8 +106,7 @@ def run_spectre(code: str, output: str = None, flags=None):
         except FileNotFoundError:
             pass
 
-        if not output:
-            try:
-                os.remove(binary_path)
-            except FileNotFoundError:
-                pass
+        try:
+            os.remove(binary_path)
+        except FileNotFoundError:
+            pass
