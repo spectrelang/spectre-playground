@@ -115,7 +115,7 @@ require(["vs/editor/editor.main"], function () {
         value: `pub fn main() void = {
     @puts("Hello, world.")
 }`,
-        language: "plaintext",
+        language: "spectre",
         theme: "vs-dark",
         automaticLayout: true
     });
@@ -126,8 +126,8 @@ require(["vs/editor/editor.main"], function () {
     monaco.languages.setMonarchTokensProvider("spectre", {
         tokenizer: {
             root: [
-                [/\b(fn|val|if|elif|else|for|match|return|break)\b/, "keyword"],
-                [/\b(i32|i64|void|ref|list)\b/, "type"],
+                [/\b(pub|fn|val|if|elif|else|for|match|return|break|continue)\b/, "keyword"],
+                [/\b(i32|i16|u16|i8|u8|i64|void|ref|list|option|result)\b/, "type"],
                 [/".*?"/, "string"],
                 [/\/\/.*$/, "comment"]
             ]
