@@ -126,8 +126,8 @@ require(["vs/editor/editor.main"], function () {
     monaco.languages.setMonarchTokensProvider("spectre", {
         tokenizer: {
             root: [
-                [/\b(pub|fn|val|if|elif|else|for|match|return|break|continue)\b/, "keyword"],
-                [/\b(i32|i16|u16|i8|u8|i64|void|ref|list|option|result)\b/, "type"],
+                [/\b(pub|fn|val|if|elif|else|mut|for|match|return|break|continue|union|enum|guarded|enum|invariant|defer|pre|post|guard|assert|trust)\b/, "keyword"],
+                [/\b(i32|i16|u16|i8|u8|i64|usize|void|ref|list|option|bool|some|none|ok|use|self|result)\b/, "type"],
                 [/".*?"/, "string"],
                 [/\/\/.*$/, "comment"]
             ]
