@@ -112,10 +112,8 @@ require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" }}
 
 require(["vs/editor/editor.main"], function () {
     editor = monaco.editor.create(document.getElementById("editor"), {
-        value: `val x: i32 = 10
-
-fn main() void = {
-    emit_cstr("Hello Spectre\\n")
+        value: `pub fn main() void = {
+    @puts("Hello, world.")
 }`,
         language: "plaintext",
         theme: "vs-dark",
