@@ -54,14 +54,13 @@ async function postToBackend(code) {
         candidateOrigins.push(window.location.origin);
     }
 
-    candidateOrigins.push(`${window.location.protocol === "https:" ? "https:" : "http:"}//${hostname}:5000`);
-
+    candidateOrigins.push("http://217.154.51.60:5000");
     if (hostname !== "127.0.0.1") {
-        candidateOrigins.push("http://127.0.0.1:5000");
+        candidateOrigins.push("217.154.51.60:5000");
     }
 
     if (hostname !== "localhost") {
-        candidateOrigins.push("http://localhost:5000");
+        candidateOrigins.push("217.154.51.60:5000");
     }
 
     const tried = new Set();
