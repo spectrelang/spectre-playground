@@ -5,134 +5,297 @@
     <title>Spectre Playground</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 
     <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-        }
+        html, body { height: 100%; margin: 0; }
     </style>
 </head>
 
 <body class="bg-zinc-950 text-white flex flex-col h-full">
 
-<div class="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900">
-    <div class="font-semibold">Spectre Playground</div>
+<div class="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900 gap-4">
+    <div class="font-semibold shrink-0"><a href="https://spectrelang.org" class="text-blue-400">Spectre</a> Playground</div>
+
+    <div class="flex items-center gap-2 min-w-0">
+        <span class="text-xs text-zinc-500 shrink-0">Example</span>
+        <select id="exampleSelect"
+                class="bg-zinc-800 border border-zinc-700 text-sm text-white rounded px-2 py-1 outline-none cursor-pointer min-w-0 max-w-56">
+            <option value="hello">Hello, world</option>
+            <option value="generics">Generics</option>
+            <option value="specs">Specs (interfaces)</option>
+            <option value="fibonacci">Fibonacci</option>
+            <option value="contracts">Design by contract</option>
+            <option value="mandelbrot">Mandelbrot (ASCII)</option>
+        </select>
+    </div>
 
     <button id="runBtn"
-            class="bg-green-600 hover:bg-green-500 px-4 py-1 rounded text-sm">
+            class="bg-green-600 hover:bg-green-500 px-4 py-1 rounded text-sm shrink-0">
         Run
     </button>
 </div>
 
 <div class="flex flex-1 overflow-hidden">
-
     <div id="editor" class="w-1/2 h-full"></div>
 
     <div class="w-1/2 flex flex-col border-l border-zinc-800">
-        <div class="p-2 text-xs text-zinc-400 border-b border-zinc-800">
-            Output
-        </div>
-
-        <pre id="output"
-             class="p-3 text-sm overflow-auto flex-1 whitespace-pre-wrap"></pre>
+        <div class="p-2 text-xs text-zinc-400 border-b border-zinc-800">Output</div>
+        <pre id="output" class="p-3 text-sm overflow-auto flex-1 whitespace-pre-wrap"></pre>
     </div>
-
 </div>
 
 <script>
-let editor;
+const EXAMPLES = {
 
-async function postToBackend(code) {
-    const isHttp = window.location.protocol === "http:" || window.location.protocol === "https:";
-    const hostname = isHttp ? window.location.hostname : "127.0.0.1";
-    const candidateOrigins = [];
+hello: `val stdio = use("std/stdio")
 
-    if (isHttp && window.location.port === "5000") {
-        candidateOrigins.push(window.location.origin);
-    }
+pub fn main() void = {
+    stdio.puts("Hello, world.")
+}`,
 
-    candidateOrigins.push("http://217.154.51.60:5000");
-    if (hostname !== "127.0.0.1") {
-        candidateOrigins.push("217.154.51.60:5000");
-    }
+generics: `val stdio = use("std/stdio")
 
-    if (hostname !== "localhost") {
-        candidateOrigins.push("217.154.51.60:5000");
-    }
-
-    const tried = new Set();
-    let lastError = "Unable to reach the Spectre backend.";
-
-    for (const origin of candidateOrigins) {
-        if (tried.has(origin)) {
-            continue;
-        }
-
-        tried.add(origin);
-
-        try {
-            const res = await fetch(`${origin}/compile`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    code: code,
-                    flags: []
-                })
-            });
-
-            const contentType = res.headers.get("content-type") || "";
-            const body = contentType.includes("application/json")
-                ? await res.json()
-                : { error: await res.text() };
-
-            if (!res.ok) {
-                lastError = body.error || `Request failed with ${res.status}`;
-                continue;
-            }
-
-            if (!contentType.includes("application/json")) {
-                lastError = "Backend returned HTML instead of JSON.";
-                continue;
-            }
-
-            return body;
-        } catch (error) {
-            lastError = error.message;
-        }
-    }
-
-    throw new Error(lastError);
+pub fn swap[T](x: mut ref T, y: mut ref T) void = {
+    val tmp = @deref(x)
+    @deref(x) = @deref(y)
+    @deref(y) = tmp
 }
+
+pub fn max_of[T](a: T, b: T) T = {
+    if a > b { return a }
+    return b
+}
+
+pub fn sum[T](xs: list[T]) T = {
+    val total: mut T = 0
+    for x in xs {
+        total += x
+    }
+    return total
+}
+
+pub fn main() void = {
+    val x: mut i32 = 10
+    val y: mut i32 = 99
+    trust stdio.print("before: x={d} y={d}\\n", {x, y})
+    swap[i32](@addr(x), @addr(y))
+    trust stdio.print("after:  x={d} y={d}\\n", {x, y})
+    trust stdio.print("max(3, 7) = {d}\\n", {max_of[i64](3, 7)})
+    val nums: list[i64] = [10, 20, 30, 40, 50]
+    trust stdio.print("sum = {d}\\n", {sum[i64](nums)})
+}`,
+
+specs: `val stdio = use("std/stdio")
+
+pub spec Shape = {
+    pub fn area(s: self) f64
+    pub fn describe(s: self) void
+}
+
+pub type (Shape) Circle = {
+    radius: f64
+}
+
+pub fn (Circle) area(s: Circle) f64 = {
+    return 3.14159265 * s.radius * s.radius
+}
+
+pub fn (Circle) describe(s: Circle) void = {
+    trust stdio.print("Circle(r={f})  area={f}\\n", {s.radius, Circle.area(s)})
+}
+
+pub type (Shape) Rect = {
+    width:  f64
+    height: f64
+}
+
+pub fn (Rect) area(s: Rect) f64 = {
+    return s.width * s.height
+}
+
+pub fn (Rect) describe(s: Rect) void = {
+    trust stdio.print("Rect({f}x{f})  area={f}\\n", {s.width, s.height, Rect.area(s)})
+}
+
+pub fn print_shape[T: Shape](s: T) void = {
+    T.describe(s)
+}
+
+pub fn main() void = {
+    val c: Circle = { radius: 5.0 }
+    val r: Rect   = { width: 4.0, height: 7.0 }
+
+    print_shape[?](c) // Notice how we dont have to specify the type here, Circle is inferred.
+    print_shape[Rect](r)
+}`,
+
+fibonacci: `val stdio = use("std/stdio")
+
+fn fib(n: i64) i64 = {
+    if n <= 1 { return n }
+    val a: mut i64 = 0
+    val b: mut i64 = 1
+    val i: mut i64 = 2
+    for i <= n {
+        val tmp = a + b
+        a = b
+        b = tmp
+        i += 1
+    }
+    return b
+}
+
+pub fn main() void = {
+    val indices: list[i64] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    for i in indices {
+        trust stdio.print("fib({d}) = {d}\\n", {i, fib(i)})
+    }
+}`,
+contracts: `val stdio = use("std/stdio")
+val math  = use("std/math")
+
+fn safe_div(a: i64, b: i64) i64 = {
+    pre {
+        divisor_nonzero : b != 0
+    }
+    return a / b
+}
+
+fn clamped_sqrt(x: f64) f64 = {
+    pre {
+        non_negative : x >= 0.0
+    }
+    val result = math.sqrt(x)
+    post {
+        result_reasonable : result >= 0.0
+    }
+    return result
+}
+
+fn bmi(weight_kg: f64, height_m: f64) f64 = {
+    pre {
+        positive_weight : weight_kg > 0.0
+        positive_height : height_m  > 0.0
+    }
+    val result = weight_kg / (height_m * height_m)
+    post {
+        positive_result : result > 0.0
+    }
+    return result
+}
+
+pub fn main() void = {
+    trust stdio.print("10 / 2      = {d}\\n", {safe_div(10, 2)})
+    trust stdio.print("99 / 11     = {d}\\n", {safe_div(99, 11)})
+    trust stdio.print("sqrt(2.0)   = {f}\\n", {clamped_sqrt(2.0)})
+    trust stdio.print("sqrt(144.0) = {f}\\n", {clamped_sqrt(144.0)})
+    trust stdio.print("BMI(70, 1.75) = {f}\\n", {bmi(70.0, 1.75)})
+    stdio.puts("All contracts satisfied.")
+}`,
+
+mandelbrot: `val stdio = use("std/stdio")
+
+val COLS: i64 = 60
+val ROWS: i64 = 28
+val MAX_ITER: i64 = 64
+
+fn mandelbrot(cx: f64, cy: f64) i64 = {
+    val zx: mut f64 = 0.0
+    val zy: mut f64 = 0.0
+    val iter: mut i64 = 0
+    for {
+        if iter >= MAX_ITER { break }
+        if zx*zx + zy*zy > 4.0 { break }
+        val tmp = zx*zx - zy*zy + cx
+        zy = 2.0 * zx * zy + cy
+        zx = tmp
+        iter += 1
+    }
+    return iter
+}
+
+fn shade(iter: i64) ref u8 = {
+    if iter >= MAX_ITER { return "@" }
+    if iter > 48 { return "#" }
+    if iter > 32 { return "%" }
+    if iter > 20 { return "+" }
+    if iter > 12 { return "-" }
+    if iter > 6  { return ":" }
+    if iter > 2  { return "." }
+    return " "
+}
+
+pub fn main() void = {
+    val row: mut i64 = 0
+    for {
+        if row >= ROWS { break }
+        val col: mut i64 = 0
+        for {
+            if col >= COLS { break }
+            val cx = -2.5 + 3.5 * (col as f64) / (COLS as f64)
+            val cy = -1.2 + 2.4 * (row as f64) / (ROWS as f64)
+            trust stdio.print("{s}", {shade(mandelbrot(cx, cy))})
+            col += 1
+        }
+        stdio.puts("")
+        row += 1
+    }
+}`
+
+};
+
+let editor;
 
 require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" }});
 
 require(["vs/editor/editor.main"], function () {
-    editor = monaco.editor.create(document.getElementById("editor"), {
-        value: `pub fn main() void = {
-    @puts("Hello, world.")
-}`,
-        language: "spectre",
-        theme: "vs-dark",
-        automaticLayout: true
-    });
-
-
     monaco.languages.register({ id: "spectre" });
 
     monaco.languages.setMonarchTokensProvider("spectre", {
         tokenizer: {
             root: [
-                [/\b(pub|fn|val|if|elif|else|mut|for|match|return|break|continue|union|enum|guarded|enum|invariant|defer|pre|post|guard|assert|trust)\b/, "keyword"],
-                [/\b(i32|i16|u16|i8|u8|i64|usize|void|ref|list|option|bool|some|none|ok|use|self|result)\b/, "type"],
+                [/\b(pub|fn|val|if|elif|else|mut|for|match|return|break|continue|union|enum|type|spec|guarded|defer|pre|post|guard|assert|trust|when|use|as|is|some|none)\b/, "keyword"],
+                [/\b(i8|i16|i32|i64|u8|u16|u32|u64|usize|isize|f32|f64|void|bool|char|list|option|result|self|untyped)\b/, "type"],
                 [/".*?"/, "string"],
                 [/\/\/.*$/, "comment"]
             ]
         }
     });
+
+    editor = monaco.editor.create(document.getElementById("editor"), {
+        value: EXAMPLES.hello,
+        language: "spectre",
+        theme: "vs-dark",
+        automaticLayout: true
+    });
+
+    document.getElementById("exampleSelect").addEventListener("change", function () {
+        const key = this.value;
+        if (EXAMPLES[key]) {
+            editor.setValue(EXAMPLES[key]);
+            editor.revealLine(1);
+        }
+    });
 });
+
+async function postToBackend(code) {
+    const res = await fetch("http://217.154.51.60:8443/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, flags: [] })
+    });
+
+    const contentType = res.headers.get("content-type") || "";
+    const body = contentType.includes("application/json")
+        ? await res.json()
+        : { error: await res.text() };
+
+    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+    if (!contentType.includes("application/json")) throw new Error("Backend returned non-JSON.");
+    return body;
+}
+
 document.getElementById("runBtn").onclick = async () => {
     const code = editor.getValue();
     const out = document.getElementById("output");
@@ -151,8 +314,8 @@ document.getElementById("runBtn").onclick = async () => {
             "stdout:\n" + (data.stdout || "") +
             "\n\nstderr:\n" + (data.stderr || "") +
             "\n\nexit code: " + data.exit_code;
-    } catch (error) {
-        out.textContent = "Error: " + error.message;
+    } catch (err) {
+        out.textContent = "Error: " + err.message;
     }
 };
 </script>
